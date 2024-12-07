@@ -292,6 +292,8 @@ function connect() {
 ### SMS Callback Endpoint
 Your FastAPI application exposes a webhook endpoint that Africa's Talking calls when an SMS is received:
 
+example https://c2f3-197-250-226-222.ngrok-free.app/sms/callback
+
 ```python
 @router.post("/sms/callback")
 async def sms_callback(request: Request):
