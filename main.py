@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.websocket import router as websocket_router
+from app.energy_analyzer import router as energy_analyzer_router    # Import the energy_analyzer router
 
 app = FastAPI(title="SMS Control API")
 
@@ -16,6 +17,7 @@ app.add_middleware(
 )
 
 app.include_router(websocket_router)
+app.include_router(energy_analyzer_router)    # Include the energy_analyzer router
 
 if __name__ == "__main__":
     import uvicorn

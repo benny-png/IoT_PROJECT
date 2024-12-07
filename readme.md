@@ -392,3 +392,162 @@ Africa's Talking sends these parameters to your webhook:
    - Check webhook logs for incoming requests
    - Verify message format parsing
    - Test state updates via WebSocket
+
+
+
+
+# Energy Analysis Integration
+
+## Setup
+
+1. Add OpenAI package to requirements.txt:
+```
+openai==1.3.0
+```
+
+2. Set environment variable:
+```bash
+export OPENAI_API_KEY='your-api-key-here'
+```
+
+3. Include router in main.py:
+```python
+from app.energy_analyzer import router as energy_router
+app.include_router(energy_router, prefix="/energy", tags=["energy"])
+```
+
+## Usage
+
+### Analyze Energy Data
+```python
+POST /energy/analyze
+
+Request Body:
+{
+    "data": {
+        "daily_usage": [
+            {"date": "2024-01-01", "kwh": 45.2},
+            {"date": "2024-01-02", "kwh": 42.8}
+        ],
+        "peak_hours": ["14:00", "19:00"],
+        "device_usage": {
+            "hvac": 40,
+            "lighting": 20,
+            "equipment": 40
+        }
+    },
+    "analysis_type": "general"  // optional, defaults to "general"
+}
+
+Response:
+{
+    "timestamp": "2024-01-03T12:34:56.789Z",
+    "analysis_type": "general",
+    "recommendations": "Detailed recommendations from AI...",
+    "data_summary": {
+        "fields_analyzed": ["daily_usage", "peak_hours", "device_usage"],
+        "analysis_duration": "short"
+    }
+}
+```
+
+### Get Analysis Types
+```python
+GET /energy/analysis-types
+
+Response:
+{
+    "supported_types": [
+        {
+            "name": "general",
+            "description": "Overall energy usage analysis and recommendations"
+        },
+        {
+            "name": "savings",
+            "description": "Focus on cost-saving opportunities"
+        },
+        {
+            "name": "patterns",
+            "description": "Detailed analysis of usage patterns and anomalies"
+        }
+    ]
+}
+```
+
+## Example Frontend Integration
+
+```javascript
+async function getEnergyRecommendations(data) {
+    try {
+        const response = await fetch(`${API_URL}/energy/analyze`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                data: data,
+                analysis_type: 'general'
+            })
+        });
+        
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const recommendations = await response.json();
+        
+        // Handle recommendations
+        displayRecommendations(recommendations);
+        
+    } catch (error) {
+        console.error('Error getting recommendations:', error);
+    }
+}
+
+function displayRecommendations(recommendations) {
+    // Example display function
+    const container = document.getElementById('recommendations');
+    container.innerHTML = `
+        <h2>Energy Recommendations</h2>
+        <p><strong>Analysis Type:</strong> ${recommendations.analysis_type}</p>
+        <div class="recommendations-text">
+            ${recommendations.recommendations}
+        </div>
+        <p class="timestamp">Generated at: ${new Date(recommendations.timestamp).toLocaleString()}</p>
+    `;
+}
+```
+
+## Data Format Examples
+
+### General Analysis
+```json
+{
+    "data": {
+        "monthly_consumption": {
+            "january": 1200,
+            "february": 1150
+        },
+        "peak_usage_times": ["09:00", "14:00", "20:00"],
+        "device_breakdown": {
+            "lighting": "30%",
+            "hvac": "45%",
+            "equipment": "25%"
+        }
+    }
+}
+```
+
+### Pattern Analysis
+```json
+{
+    "data": {
+        "hourly_readings": [
+            {"time": "00:00", "kwh": 12.5},
+            {"time": "01:00", "kwh": 11.8}
+        ],
+        "weather_data": {
+            "temperature": 22,
+            "humidity": 65
+        }
+    },
+    "analysis_type": "patterns"
+}
+```
