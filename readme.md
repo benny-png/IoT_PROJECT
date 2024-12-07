@@ -284,3 +284,109 @@ function connect() {
 1. Use browser Developer Tools (F12)
 2. Check Network tab for API requests
 3. Monitor Console for WebSocket messages and errors
+
+
+
+## Africa's Talking SMS Webhook Integration
+
+### SMS Callback Endpoint
+Your FastAPI application exposes a webhook endpoint that Africa's Talking calls when an SMS is received:
+
+```python
+@router.post("/sms/callback")
+async def sms_callback(request: Request):
+    form_data = await request.form()
+    message = form_data.get("text", "").strip().upper()
+    from_number = form_data.get("from", "")
+```
+
+### Webhook Setup
+1. In your Africa's Talking dashboard:
+   - Go to SMS > SMS Callback URL
+   - Set callback URL to: `https://your-domain.com/sms/callback`
+   - For local testing, use ngrok: `https://your-ngrok-url/sms/callback`
+
+### Callback Data Format
+Africa's Talking sends these parameters to your webhook:
+```json
+{
+    "text": "ON",           // The SMS message content
+    "from": "+254711XXXXX", // Sender's phone number
+    "to": "12345",          // Your shortcode/phone number
+    "id": "msg-id",         // Message ID
+    "linkId": "link-id",    // Optional link ID
+    "date": "2024-01-01"    // Message timestamp
+}
+```
+
+### Complete Flow
+1. User sends SMS "ON" or "OFF" to your AT number
+2. Africa's Talking receives SMS and POSTs to your webhook
+3. Your webhook:
+   ```python
+   if message in ["ON", "OFF"]:
+       # Update state
+       state["status"] = message
+       
+       # Send SMS confirmation
+       response_message = f"Device has been turned {message}"
+       sms.send(response_message, [from_number])
+       
+       # Broadcast to WebSocket clients
+       await manager.broadcast(state)
+   ```
+4. Connected WebSocket clients receive update
+5. User receives confirmation SMS
+
+### Testing Webhook Locally
+1. Install ngrok:
+   ```bash
+   npm install -g ngrok
+   # or
+   snap install ngrok
+   ```
+
+2. Start ngrok tunnel:
+   ```bash
+   ngrok http 8000
+   ```
+
+3. Update Africa's Talking callback URL with ngrok URL
+
+### Webhook Security
+1. Africa's Talking sends these headers:
+   ```
+   Content-Type: application/x-www-form-urlencoded
+   Accept: application/json
+   ```
+
+2. Consider adding validation:
+   ```python
+   # Example validation
+   @router.post("/sms/callback")
+   async def sms_callback(request: Request):
+       # Validate content type
+       if request.headers.get("content-type") != "application/x-www-form-urlencoded":
+           raise HTTPException(status_code=400, detail="Invalid content type")
+           
+       # Process SMS...
+   ```
+
+### Common Webhook Issues
+1. **Callback URL Not Reachable**
+   - Check your server is running
+   - Verify URL is publicly accessible
+   - Test using ngrok for local development
+
+2. **Invalid Response Format**
+   - Ensure you return valid JSON
+   - Include required response fields
+
+3. **Timeout Issues**
+   - Process webhook quickly (under 30 seconds)
+   - Use background tasks for long operations
+
+4. **SMS Not Processing**
+   - Check webhook logs for incoming requests
+   - Verify message format parsing
+   - Test state updates via WebSocket
