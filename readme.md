@@ -1,95 +1,150 @@
-# IoT Control System Integration Guide
+# WebSocket Integration Guide for IoT Control System
 
-This guide explains how to integrate with the IoT Control System, either by using the provided frontend interface or by building your own implementation.
+## WebSocket Communication Protocol
 
-## Frontend Integration
+### 1. Initial Connection
+When your frontend first connects to the WebSocket, the backend immediately sends the current state:
 
-### Quick Start
-1. Save the HTML file provided below
-2. Update the `API_URL` constant to point to your backend
-3. Open in any web browser
-
-### HTML Template
-```html
-<!-- Save this as control-panel.html -->
-<!DOCTYPE html>
-<html>
-<head>
-    <title>IoT Control Panel</title>
-    <!-- Your styles here -->
-</head>
-<body>
-    <div class="container">
-        <!-- Your HTML structure -->
-    </div>
-
-    <script>
-        // 1. Configure your API URL
-        const API_URL = 'localhost:8000'; // Change this to your backend URL
-
-        // 2. WebSocket Connection
-        let ws;
-        function connectWebSocket() {
-            ws = new WebSocket(`ws://${API_URL}/ws`);
-            // Handle WebSocket events...
-        }
-
-        // 3. Device Control
-        async function controlDevice(newStatus) {
-            try {
-                const response = await fetch(`http://${API_URL}/control`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status: newStatus })
-                });
-                const data = await response.json();
-                // Handle response...
-            } catch (error) {
-                console.error('Error:', error);
-            }
-        }
-    </script>
-</body>
-</html>
-```
-
-### Configuration
-- Development: Use `localhost:8000`
-- Production: Use your deployed backend URL (e.g., `your-app.onrender.com`)
-
-### Available Endpoints
-
-1. WebSocket Connection
 ```javascript
-// Connect to real-time updates
-ws = new WebSocket(`ws://${API_URL}/ws`);
+// Frontend: Establishing connection
+const ws = new WebSocket(`ws://${API_URL}/ws`);
+
+ws.onopen = function() {
+    console.log('Connected to WebSocket');
+    // Backend will automatically send current state
+};
+
+ws.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    // data format: { "status": "ON" } or { "status": "OFF" }
+    updateUI(data.status);
+};
 ```
 
-2. Control Device
-```javascript
-// Turn device ON/OFF
-await fetch(`http://${API_URL}/control`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: "ON" }) // or "OFF"
-});
+### 2. Message Format
+All WebSocket messages follow this JSON format:
+```json
+{
+    "status": "ON" | "OFF"
+}
 ```
 
-3. Toggle Device
+### 3. Complete Frontend Implementation Example
 ```javascript
-// Toggle current state
-await fetch(`http://${API_URL}/toggle`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
-});
+let ws;
+const API_URL = 'your-backend-url';  // e.g., 'localhost:8000' or 'your-app.render.com'
+
+function connectWebSocket() {
+    // Determine WebSocket protocol
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${protocol}//${API_URL}/ws`);
+    
+    // Connection opened
+    ws.onopen = function() {
+        console.log('Connected to WebSocket');
+        document.getElementById('connectionStatus').textContent = 'Connected';
+    };
+    
+    // Listen for messages
+    ws.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        updateUI(data.status);
+    };
+    
+    // Connection closed
+    ws.onclose = function() {
+        console.log('Disconnected from WebSocket');
+        document.getElementById('connectionStatus').textContent = 'Disconnected';
+        // Optional: Implement reconnection logic
+        setTimeout(connectWebSocket, 3000);
+    };
+    
+    // Connection error
+    ws.onerror = function(error) {
+        console.error('WebSocket error:', error);
+        document.getElementById('connectionStatus').textContent = 'Error connecting';
+    };
+}
+
+// Update UI based on received status
+function updateUI(status) {
+    document.getElementById('statusText').textContent = status;
+    document.getElementById('indicator').className = `indicator ${status}`;
+}
+
+// Call this when page loads
+connectWebSocket();
 ```
 
-4. Get Current State
+### 4. When Do You Receive Updates?
+1. **Initial Connection**: Backend sends current state immediately
+2. **SMS Received**: When someone sends "ON" or "OFF" via SMS
+3. **API Control**: When device state changes through REST API endpoints
+4. **Toggle**: When device is toggled through the toggle endpoint
+
+### 5. Error Handling Best Practices
 ```javascript
-// Check device status
-const response = await fetch(`http://${API_URL}/state`);
-const data = await response.json();
+function setupWebSocket() {
+    try {
+        connectWebSocket();
+    } catch (error) {
+        console.error('WebSocket setup failed:', error);
+        // Implement your error UI update here
+    }
+}
+
+// Reconnection logic
+let reconnectAttempts = 0;
+const maxReconnectAttempts = 5;
+
+function handleDisconnection() {
+    if (reconnectAttempts < maxReconnectAttempts) {
+        reconnectAttempts++;
+        console.log(`Reconnecting... Attempt ${reconnectAttempts}`);
+        setTimeout(connectWebSocket, 3000);
+    } else {
+        console.error('Max reconnection attempts reached');
+        // Update UI to show permanent disconnection
+    }
+}
 ```
+
+### 6. Testing WebSocket Connection
+```javascript
+// Add this to check if you're receiving updates
+ws.onmessage = function(event) {
+    console.log('Received:', event.data);  // See the raw message
+    const data = JSON.parse(event.data);
+    console.log('Parsed status:', data.status);  // See the parsed status
+    updateUI(data.status);
+};
+```
+
+### 7. Common Issues and Solutions
+
+1. **Connection Failing**
+   - Check if backend URL is correct
+   - Verify WebSocket protocol matches (ws:// for HTTP, wss:// for HTTPS)
+   - Ensure backend is running and accessible
+
+2. **Not Receiving Updates**
+   - Check browser console for errors
+   - Verify onmessage handler is properly set up
+   - Ensure JSON parsing is working
+
+3. **State Not Syncing**
+   - Check if updateUI function is being called
+   - Verify DOM element IDs match your HTML
+   - Console.log the received data for debugging
+
+### 8. Quick Integration Checklist
+- [ ] Set up WebSocket connection
+- [ ] Implement message handler
+- [ ] Add reconnection logic
+- [ ] Set up error handling
+- [ ] Test initial connection
+- [ ] Verify state updates
+- [ ] Implement UI updates
 
 ## Backend API Reference
 

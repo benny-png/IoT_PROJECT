@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>IoT Control Panel</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            text-align: center;
+            background-color: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 400px;
+        }
+        .indicator {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            margin: 1rem auto;
+            transition: background-color 0.3s;
+        }
+        .ON {
+            background-color: #4CAF50;
+        }
+        .OFF {
+            background-color: #f44336;
+        }
+        .controls {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 1.5rem;
+        }
+        button {
+            padding: 0.8rem 1.5rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+        .on-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .off-btn {
+            background-color: #f44336;
+            color: white;
+        }
+        .toggle-btn {
+            background-color: #2196F3;
+            color: white;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        #status {
+            color: #666;
+            margin-top: 1rem;
+            padding: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>IoT Control Panel</h1>
+        <div class="indicator OFF" id="indicator"></div>
+        <div>Status: <span id="statusText">OFF</span></div>
+        <div class="controls">
+            <button class="on-btn" onclick="controlDevice('ON')">ON</button>
+            <button class="toggle-btn" onclick="toggleDevice()">Toggle</button>
+            <button class="off-btn" onclick="controlDevice('OFF')">OFF</button>
+        </div>
+        <div id="status">Not connected</div>
+    </div>
+
+    <script>
+        // API Configuration
+        const API_URL = 'localhost:8000';
+        
+        // WebSocket connection
+        let ws;
+        function connectWebSocket() {
+            ws = new WebSocket(`ws://${API_URL}/ws`);
+            
+            ws.onopen = () => {
+                document.getElementById('status').textContent = 'Connected';
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                updateUI(data.status);
+            };
+
+            ws.onclose = () => {
+                document.getElementById('status').textContent = 'Disconnected. Reconnecting...';
+                setTimeout(connectWebSocket, 3000);
+            };
+        }
+
+        // Update UI based on state
+        function updateUI(status) {
+            document.getElementById('statusText').textContent = status;
+            document.getElementById('indicator').className = `indicator ${status}`;
+        }
+
+        // Control device
+        async function controlDevice(newStatus) {
+            try {
+                const response = await fetch(`http://${API_URL}/control`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ status: newStatus })
+                });
+                const data = await response.json();
+                updateUI(data.current_state.status);
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('status').textContent = 'Error controlling device';
+            }
+        }
+
+        // Toggle device
+        async function toggleDevice() {
+            try {
+                const response = await fetch(`http://${API_URL}/toggle`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await response.json();
+                updateUI(data.current_state.status);
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('status').textContent = 'Error toggling device';
+            }
+        }
+
+        // Initialize connection when page loads
+        connectWebSocket();
+    </script>
+</body>
+</html>
