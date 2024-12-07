@@ -5,6 +5,7 @@ import os
 class Settings(BaseSettings):
     AT_USERNAME: str
     AT_API_KEY: str
+    OPENAI_API_KEY: str
     # Define it as a list with a default value
     ALLOWED_ORIGINS: List[str] = ["*"]
 

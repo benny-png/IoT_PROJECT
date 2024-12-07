@@ -6,15 +6,70 @@ from openai import OpenAI
 import json
 from datetime import datetime
 import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 router = APIRouter()
 
-# Initialize OpenAI client
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+# Get API key with error handling
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+if not OPENAI_API_KEY:
+    print("Warning: OPENAI_API_KEY not found in environment variables")
+    MOCK_MODE = True
+else:
+    MOCK_MODE = False
+    client = OpenAI(api_key=OPENAI_API_KEY)
 
 class EnergyData(BaseModel):
     data: Dict[str, Any]
     analysis_type: Optional[str] = "general"
+
+def get_mock_response(data: Dict, analysis_type: str) -> Dict:
+    """Return mock response for testing without API key"""
+    mock_recommendations = {
+        "general": """
+            Mock General Recommendations:
+            1. Your daily energy usage appears to be highest during 2-4 PM
+            2. HVAC system accounts for 40% of your consumption
+            3. Recommended Actions:
+               - Adjust thermostat settings
+               - Install LED lighting
+               - Schedule equipment maintenance
+            4. Estimated savings potential: 15-20%
+        """,
+        "savings": """
+            Mock Savings Analysis:
+            1. Peak Usage: 2-4 PM daily
+            2. Potential Savings: $200-300 monthly
+            3. Priority Actions:
+               - Optimize HVAC scheduling
+               - Update lighting systems
+               - Install smart controls
+            4. ROI Timeline: 6-8 months
+        """,
+        "patterns": """
+            Mock Pattern Analysis:
+            1. Usage Trends:
+               - Weekday peaks: Morning and Evening
+               - Weekend: More consistent usage
+            2. Anomalies: Unusual spike every Friday
+            3. Industry Comparison: 20% above average
+            4. Optimization Opportunities Identified
+        """
+    }
+    
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "analysis_type": analysis_type,
+        "recommendations": mock_recommendations.get(analysis_type, mock_recommendations["general"]),
+        "data_summary": {
+            "fields_analyzed": list(data.keys()),
+            "analysis_duration": "short",
+            "mode": "MOCK - No OpenAI API Key"
+        }
+    }
 
 def generate_prompt(data: Dict, analysis_type: str) -> str:
     """Generate appropriate prompt based on data and analysis type"""
@@ -61,31 +116,38 @@ def generate_prompt(data: Dict, analysis_type: str) -> str:
 async def analyze_energy_data(request: EnergyData):
     """Analyze energy data and provide recommendations"""
     try:
-        # Generate appropriate prompt
+        if MOCK_MODE:
+            return get_mock_response(request.data, request.analysis_type)
+
+        if not request.data:
+            raise HTTPException(status_code=400, detail="No data provided for analysis")
+
         prompt = generate_prompt(request.data, request.analysis_type)
         
-        # Get recommendations from OpenAI
-        completion = client.chat.completions.create(
-            model="gpt-4",  # or use gpt-3.5-turbo for faster, cheaper responses
-            messages=[
-                {"role": "system", "content": "You are an energy efficiency expert specializing in data analysis and providing actionable recommendations."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,  # Balanced between creativity and consistency
-            max_tokens=1000   # Adjust based on needed response length
-        )
-        
-        # Extract and format recommendations
-        recommendations = completion.choices[0].message.content
-        
-        # Add metadata to response
+        try:
+            completion = client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are an energy efficiency expert specializing in data analysis and providing actionable recommendations."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=1000
+            )
+            
+            recommendations = completion.choices[0].message.content
+            
+        except Exception as api_error:
+            print(f"OpenAI API Error: {str(api_error)}")
+            return get_mock_response(request.data, request.analysis_type)
+
         response = {
             "timestamp": datetime.now().isoformat(),
             "analysis_type": request.analysis_type,
             "recommendations": recommendations,
             "data_summary": {
                 "fields_analyzed": list(request.data.keys()),
-                "analysis_duration": "short"  # You could add actual duration calculation
+                "analysis_duration": "short"
             }
         }
         
@@ -94,7 +156,6 @@ async def analyze_energy_data(request: EnergyData):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
-# Optional: Add endpoint for supported analysis types
 @router.get("/analysis-types")
 async def get_analysis_types():
     """Return list of supported analysis types"""
@@ -113,4 +174,13 @@ async def get_analysis_types():
                 "description": "Detailed analysis of usage patterns and anomalies"
             }
         ]
+    }
+
+@router.get("/status")
+async def get_api_status():
+    """Check API status and mode"""
+    return {
+        "status": "operational",
+        "mode": "mock" if MOCK_MODE else "live",
+        "timestamp": datetime.now().isoformat()
     }
